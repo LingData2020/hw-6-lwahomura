@@ -1,0 +1,195 @@
+---
+title: "HW6 Linear mixed-effect models"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+---
+## 0. Packages and data
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(lingtypology) # only for linguistic mapping
+library(broom)
+```
+
+### UPSID database
+In this dataset we have number of consonants and vowels in 402 languages collected from UPSID database (http://www.lapsyd.ddl.ish-lyon.cnrs.fr/lapsyd/).  
+* `language` - language  
+* `area` - language area according to Glottolog (http://glottolog.org/)  
+* `consonants` - the number of consonants in the language  
+* `vowels` - the number of vowels in the language  
+
+```{r, warning=FALSE, message=FALSE}
+upsid <- read_csv("https://raw.githubusercontent.com/LingData2019/LingData2020/master/data/upsid.csv")
+upsid
+```
+
+```{r}
+# you can map the languages using the lingtypology package
+# map.feature(upsid$language,
+           # features = upsid$area,
+           # label = upsid$language,
+           # label.hide = TRUE)
+```
+
+In this work, you will fit a number of linear and linear mixed-effect models that predict the number of vowels in a language by the number of consonants and other variables.
+
+## 1. Linear model
+
+### 1.1 
+Make a scatterplot of the number of consonants and the number of vowels using the `ggplot()`.   
+```{r 1.1, echo = FALSE}
+first_plot <- ggplot(data=upsid, aes(x=consonants, y=vowels)) + geom_point() + labs(x="consonants", y="vowels") + theme_bw()
+first_plot
+```
+
+```{r}
+# we use the theme_bw() theme, you can use other themes if you want
+```
+### 1.2
+Fit the basic linear model `fit1` that predicts the number of vowels by the number of consonants. Look at the summary of the model.
+```{r 1.2, include=FALSE}
+# fit1 <- lm(...)
+fit1 <- lm(data=upsid, vowels ~ consonants)
+summary(fit1)
+```
+
+### 1.3
+Is `consonants` a significant predictor? Write down YES or NO.
+```{1.3}
+YES
+```
+
+### 1.4
+*no evaluation*  
+To draw predictions on the graph, we may use `fortify` function. It adds column entitled `.fitted` (note period) that is calculated as a prediction of a model as well as some other columns.
+
+Try this code and see the result:
+
+```{r}
+head(fortify(fit1))
+```
+Another option is to use `augment` function from `broom` library that works in a similar way.
+
+```{r}
+library(broom)
+head(augment(fit1))
+```
+
+### 1.5
+Use one of these function to add a line to the scatterplot 1.1. You have to use `geom_line` and pass the result of `augment` or `fortify` as argument `data` in `geom_line`. (E.g. `geom_line(data = <result of augment>, ...`))
+
+```{r 1.5, echo=FALSE}
+first_plot + geom_line(data = augment(fit1), aes(x = consonants, y = .fitted), color = "blue")
+#
+#  geom_line(data = augment(fit1), aes(x = consonants, y = .fitted), color = "blue")
+```
+
+## 2. Mixed-effect models
+Let us look at the data with respect to the `area` groups. 
+
+### 2.1
+Re-build the scatterplot `1.1` coloring the points by `area`.
+```{r 2.1, echo=FALSE}
+second_plot <- ggplot(data=upsid, aes(x=consonants, y=vowels, color=area)) + geom_point() + labs(x="consonants", y="vowels") + theme_bw()
+second_plot
+# you can also draw stat_ellipse()
+```
+
+### 2.2
+Use lmer() to fit the model `fit2` with random `area` group intercept. Your model is given by equation:
+
+$$vowels = \beta_0 + \beta_1 \times consonants + u(area).$$
+```{r 2.2, include=FALSE}
+fit2 <- lmer(data=upsid, formula=vowels ~ consonants + (1|area))
+summary(fit2)
+```
+
+
+### 2.3
+Add the regression lines to the scatterplot `2.1` using `fortify` or `augment` methods.
+```{r 2.3, echo=FALSE}
+augment(fit2)
+second_plot + geom_line(data = augment(fit2), aes(x = consonants, y = .fitted, color=area))
+```
+
+### 2.4
+Interpret the results of the model. (Use `summary()` to get information about your model.) Is _consonansts_ variable still significant? How it changes after we added _area_ random effect? What can you say about lines on the graph? How are they located with respect to each other? Why?
+
+```{2.4}
+Yes, consonants are still significant.
+The p-value became higher after we added area random effects.
+The lines predict vowels using consonants for an ares, which gives us much more correct modelling.
+They are parallel because of the random intercept - the formula is like 
+  (b0 + random_constant_for_area) + b1 * X + e,
+so the lines differ just for a constant.
+```
+
+
+## 3. Mixed-effect models with random slopes.
+### 3.1
+Fit the model `fit3` with random slope that depends on _area_. Your model is given by formula:
+
+$$vowels = \beta_0 + (\beta_1 + u(area))\times consonants.$$
+You can consult [this](http://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#model-specification) manual to choose the correct syntax in your `lmer` formula.
+
+```{r 3.1, include=FALSE}
+fit3 <- lmer(data=upsid, formula=vowels ~ consonants + (0 + consonants|area))
+summary(fit3)
+```
+
+### 3.2
+Draw a figure with prediction lines:
+
+```{r 3.2, echo=FALSE}
+second_plot + geom_line(data = augment(fit3), aes(x = consonants, y = .fitted, color=area))
+```
+
+### 3.3
+Interpret the results. Is _constants_ still significant? Why? What can you say about lines on the graph? How are they located with respect to each other? Why?
+
+```{3.3}
+Consonants are now not significant, p-value is at 1.
+The lines should give us netter prediction of vowel count.
+The lines now intersect in one spot because the formula now is like
+  b0 + (b1 + random_constant_for_area) * X + e,
+so the line angle now also is different for different areas.
+```
+
+## 4. Mixed-effect models with random intercept and random slopes.
+Now let us assume we have both random intercept and random slope (and they are not correlated). Our model is of the form:
+
+$$vowels = \beta_0 + u_1(area) + (\beta_1 + u_2(area))\times consonants.$$
+
+### 4.1
+Fit the model `fit4`.
+
+```{r 4.1, include=FALSE}
+fit4 <- lmer(data=upsid, formula=vowels ~ consonants + (0 + consonants|area) + (1|area))
+summary(fit4)
+```
+
+### 4.2
+Draw a figure with predictions:  
+
+```{r 4.2, echo=FALSE}
+second_plot + geom_line(data = augment(fit4), aes(x = consonants, y = .fitted, color=area))
+```
+
+### 4.3
+Interpret the results. Is _constants_ significant? How can we interpret the difference between the prediction lines of these three models?
+
+```{4.3}
+Consonants are still not significant.
+The difference of the lines exists because of the difference in formulas:
+1) (b0 + random_constant_for_area) + b1 * X + e
+2) b0 + (b1 + random_constant_for_area) * X + e,
+3) (b0 + random_constant_for_area_1) + (b1 + random_constant_for_area_2) * X + e,
+The first model tells us that there is smth like a base count of vowels for a language in an area.
+The second model tells us that there is also a constant which can tell how the count of vowels grows based on the count of consonants.
+The third model uses both this constants to show that they both make an effect on the count.
+Thus we can say that if we take any area we can simply say that there will be at least (b0 + random_constant_for_area) vowels; we also can predict the growth of this count.
+```
